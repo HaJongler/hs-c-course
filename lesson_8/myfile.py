@@ -1,12 +1,14 @@
-import os
+from myitem import MyItem
 
 
-class MyFile(object):
-    def __init__(self, path):
-        self.name = os.path.basename(path)
-        self.os_data = os.stat(path)
-        self.content = self.load(path)
+class MyFile(MyItem):
+    def __init__(self, path, parent):
+        super(MyFile, self).__init__(path, parent)
 
-    def load(self, path):
-        with open(path, 'rb') as f:
+    def load(self):
+        with open(self.get_path(), 'rb') as f:
             return f.read()
+
+    def save(self):
+        with open(self.get_path(), 'wb') as f:
+            f.write(self.content)

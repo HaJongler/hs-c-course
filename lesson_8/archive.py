@@ -1,6 +1,8 @@
+import os
 import pickle
 
 from myfile import MyFile
+from myfolder import MyFolder
 
 
 class Archive(object):
@@ -8,8 +10,14 @@ class Archive(object):
         self.data = data
 
     @classmethod
-    def create_from_list(cls, *files):
-        return cls([MyFile(fyle) for fyle in files])
+    def create_from_list(cls, *paths):
+        data = []
+        for path in paths:
+            abspath = os.path.abspath(path)
+            data.append(MyFile(abspath, os.path.dirname(abspath))
+                        if os.path.isfile(abspath)
+                        else MyFolder(abspath, os.path.dirname(abspath)))
+        return cls(data)
 
     @classmethod
     def load_from_file(cls, path):
@@ -21,9 +29,9 @@ class Archive(object):
             pickle.dump(self.data, f, protocol=2)
 
     def extract(self):
-        for myfile in self.data:
-            with open(myfile.name, 'wb') as f:
-                f.write(myfile.content)
+        for myitem in self.data:
+            myitem.parent = '.'
+            myitem.save()
 
     def list_contents(self):
         for myfile in self.data:
