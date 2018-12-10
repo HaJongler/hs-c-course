@@ -3,6 +3,9 @@
 #include <linux/module.h>
 #include <linux/fs.h>
 #include <asm/uaccess.h> /* for put_user */
+#include <linux/uaccess.h>
+#include <linux/slab.h>
+
 
 /*
  * Prototypes - this would normally go in a .h file
@@ -26,7 +29,8 @@ static ssize_t device_write(struct file *, const char *, size_t, loff_t *);
 static int eof_flag = 0;
 static int Major;
 static int device_counter = 0;
-char *msg = NULL;
+static char *msg;
+static size_t msg_len;
 
 static struct file_operations fops = {
   .read = device_read,
@@ -91,7 +95,6 @@ static int device_open(struct inode *inode, struct file *filp)
 static int device_release(struct inode *inode, struct file *filp)
 {
   device_counter--;
-
   eof_flag = 0;
   module_put(THIS_MODULE);
 
@@ -102,17 +105,27 @@ static int device_release(struct inode *inode, struct file *filp)
  * Called when a process, which already opened the dev file, attempts to read
  * from it.
  */
-static ssize_t device_read(struct file *filp, /* see include/linux/fs.h */
-                           char __user *buffer, /* buffer to fill with data */
-                           size_t length, /* length of the buffer */
+static ssize_t device_read(struct file *filp, /* see include/linux/fs.h   */
+                           char __user *buffer,      /* buffer to fill with data */
+                           size_t length,     /* length of the buffer     */
                            loff_t *offset)
 {
-  if(buf == NULL) {
-	printk("OH NO");
-    return 0;
+  /*
+   * Number of bytes actually written to the buffer
+   */
+  size_t i = 0;
+
+  /* Set EOF flag to that we output the buffer only once */
+  if(eof_flag) {
+      return 0;
   }
-  int i = copy_to_user(buffer, msg, count);
-  printk(KERN_INFO "%s", buffer);
+  eof_flag++;
+
+  while(i < length && i < BUF_LEN) {
+      put_user(msg[i], &buffer[i]);
+      i++;
+  }
+
   return i;
 }
 
@@ -122,11 +135,30 @@ static ssize_t device_read(struct file *filp, /* see include/linux/fs.h */
 static ssize_t
 device_write(struct file *filp, const char *buf, size_t len, loff_t *off)
 {
-  msg = kmalloc(sizeof(*buf) * len, GFP_KERNEL);
-  if (msg == NULL) {
-    return 0;
-  }
-  int i = copy_from_user(msg, buf, sizeof(*buf));
-  printk(KERN_INFO "%s", msg);
-  return i;
+    ssize_t retval = 0;
+    
+    if (msg)
+        kfree(msg);
+
+    msg = kmalloc(len, GFP_KERNEL);
+
+    if (!msg)
+        goto out;
+
+    if (copy_from_user(msg, buf, len)) {
+        kfree(msg);
+        retval = -EFAULT;
+        goto out;
+    }
+
+    *off = len;
+    retval = len;
+    msg_len = len;
+    printk("%s\n", msg);
+    return retval;
+    
+out:
+    
+  printk(KERN_ALERT "Sorry, this operation isn't supported.\n");
+  return -EINVAL;
 }
