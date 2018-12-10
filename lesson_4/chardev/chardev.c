@@ -3,9 +3,6 @@
 #include <linux/module.h>
 #include <linux/fs.h>
 #include <asm/uaccess.h> /* for put_user */
-#include <linux/uaccess.h>
-#include <linux/slab.h>
-
 
 /*
  * Prototypes - this would normally go in a .h file
@@ -21,6 +18,7 @@ static ssize_t device_write(struct file *, const char *, size_t, loff_t *);
 #define SUCCESS 0
 #define DEVICE_NAME "chardev"
 #define BUF_LEN 1024
+#define MAX_LINE_COUNT 128
 
 /*
  * Global variables are declared as static, so are global within the file.
@@ -29,8 +27,10 @@ static ssize_t device_write(struct file *, const char *, size_t, loff_t *);
 static int eof_flag = 0;
 static int Major;
 static int device_counter = 0;
-static char *msg;
-static size_t msg_len;
+char *msg = NULL;
+const char *read_message = "Hello, world !";
+
+
 
 static struct file_operations fops = {
   .read = device_read,
@@ -95,6 +95,7 @@ static int device_open(struct inode *inode, struct file *filp)
 static int device_release(struct inode *inode, struct file *filp)
 {
   device_counter--;
+
   eof_flag = 0;
   module_put(THIS_MODULE);
 
@@ -105,60 +106,62 @@ static int device_release(struct inode *inode, struct file *filp)
  * Called when a process, which already opened the dev file, attempts to read
  * from it.
  */
-static ssize_t device_read(struct file *filp, /* see include/linux/fs.h   */
-                           char __user *buffer,      /* buffer to fill with data */
-                           size_t length,     /* length of the buffer     */
-                           loff_t *offset)
+static ssize_t chardev_read(struct file *file, char *buf, size_t buf_len, 
+		     loff_t *f_pos)
 {
-  /*
-   * Number of bytes actually written to the buffer
-   */
-  size_t i = 0;
+  unsigned long count = strlen(read_message) +1;
+  int ret = 0;
 
-  /* Set EOF flag to that we output the buffer only once */
-  if(eof_flag) {
-      return 0;
+  DPRINTK("want %lu chars starting a pos %lu\n",
+	 (unsigned long)buf_len,(unsigned long)*f_pos);
+  if (*f_pos >= count)
+    goto end;			/* EOF */
+
+  count -= *f_pos;
+
+  if (buf_len < count)
+    count = buf_len;
+
+  DPRINTK("copying %lu chars starting a pos %lu\n",count,
+	 (unsigned long)*f_pos);
+  if (copy_to_user(buf,read_message + *f_pos, count )) {
+    ret = -EFAULT;
+    goto end;
   }
-  eof_flag++;
+  ret = count;
+  *f_pos += count;
 
-  while(i < length && i < BUF_LEN) {
-      put_user(msg[i], &buffer[i]);
-      i++;
-  }
-
-  return i;
+ end:
+  return ret;
 }
 
-/*
- * Called when a process writes to dev file: echo "hi" > /dev/hello
+/* 
+ * This function is called when somebody tries to
+ * write into our device file. 
  */
-static ssize_t
-device_write(struct file *filp, const char *buf, size_t len, loff_t *off)
+static ssize_t chardev_write(struct file *file, const char *buf, size_t buf_len, 
+		      loff_t *f_pos)
 {
-    ssize_t retval = 0;
+  unsigned long count = MAX_LINE_COUNT;	/* Max write at a time */
+  int ret = 0;
+  char copy_buf[MAX_LINE_COUNT+1];
     
-    if (msg)
-        kfree(msg);
+  DPRINTK("want %lu chars starting a pos %lu\n",
+	 (unsigned long)buf_len,(unsigned long)*f_pos);
+  
+  if (buf_len < count)
+    count = buf_len;
 
-    msg = kmalloc(len, GFP_KERNEL);
+  if (copy_from_user(copy_buf,buf,count)) {
+    ret = -EFAULT;
+    goto end;
+  }
+  
+  copy_buf[count] = '\0';
+  ret = count;
 
-    if (!msg)
-        goto out;
-
-    if (copy_from_user(msg, buf, len)) {
-        kfree(msg);
-        retval = -EFAULT;
-        goto out;
-    }
-
-    *off = len;
-    retval = len;
-    msg_len = len;
-    printk("%s\n", msg);
-    return retval;
-    
-out:
-    
-  printk(KERN_ALERT "Sorry, this operation isn't supported.\n");
-  return -EINVAL;
+  printk(KERN_INFO "writing:\n%s",copy_buf);
+  
+ end:
+  return ret;
 }
