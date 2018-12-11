@@ -106,13 +106,13 @@ static int device_release(struct inode *inode, struct file *filp)
  * Called when a process, which already opened the dev file, attempts to read
  * from it.
  */
-static ssize_t chardev_read(struct file *file, char *buf, size_t buf_len, 
+static ssize_t device_read(struct file *file, char *buf, size_t buf_len,
 		     loff_t *f_pos)
 {
   unsigned long count = strlen(read_message) +1;
   int ret = 0;
 
-  DPRINTK("want %lu chars starting a pos %lu\n",
+  PRINTK("want %lu chars starting a pos %lu\n",
 	 (unsigned long)buf_len,(unsigned long)*f_pos);
   if (*f_pos >= count)
     goto end;			/* EOF */
@@ -122,7 +122,7 @@ static ssize_t chardev_read(struct file *file, char *buf, size_t buf_len,
   if (buf_len < count)
     count = buf_len;
 
-  DPRINTK("copying %lu chars starting a pos %lu\n",count,
+  PRINTK("copying %lu chars starting a pos %lu\n",count,
 	 (unsigned long)*f_pos);
   if (copy_to_user(buf,read_message + *f_pos, count )) {
     ret = -EFAULT;
@@ -139,14 +139,14 @@ static ssize_t chardev_read(struct file *file, char *buf, size_t buf_len,
  * This function is called when somebody tries to
  * write into our device file. 
  */
-static ssize_t chardev_write(struct file *file, const char *buf, size_t buf_len, 
+static ssize_t device_write(struct file *file, const char *buf, size_t buf_len,
 		      loff_t *f_pos)
 {
   unsigned long count = MAX_LINE_COUNT;	/* Max write at a time */
   int ret = 0;
   char copy_buf[MAX_LINE_COUNT+1];
     
-  DPRINTK("want %lu chars starting a pos %lu\n",
+  PRINTK("want %lu chars starting a pos %lu\n",
 	 (unsigned long)buf_len,(unsigned long)*f_pos);
   
   if (buf_len < count)
