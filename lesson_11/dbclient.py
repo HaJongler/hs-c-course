@@ -1,8 +1,8 @@
 import socket
 
-from .command_parser import Command
+from command_parser import Command
 
-DEFAULT_SERVER, DEFAULT_PORT = '127.0.0.1', 1111
+HOST, PORT = '127.0.0.1', 1111
 
 
 class Client(object):
@@ -12,7 +12,8 @@ class Client(object):
 
     def __enter__(self):
         self.s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        self.s.connect((DEFAULT_SERVER, DEFAULT_PORT))
+        self.s.connect((HOST, PORT))
+        return self
 
     def __exit__(self, exc_type, exc_val, exc_tb):
         self.s.close()
@@ -22,6 +23,7 @@ class Client(object):
             command = raw_input('> ')
             if self.command_parser.parse(command):
                 self.s.sendall(command)
+                print self.s.recv(5120)
 
 
 def main():

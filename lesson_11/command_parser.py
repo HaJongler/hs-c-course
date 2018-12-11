@@ -6,6 +6,9 @@ class Command(object):
         self.parser = argparse.ArgumentParser()
         self.__add_arguments()
 
+    def __print_err(self, message):
+        print message
+
     def __check_key(self, k):
         if not k.isalnum():
             raise argparse.ArgumentTypeError("must be alphanumeric")
